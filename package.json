@@ -1,0 +1,23 @@
+{
+  "name": "pruebasusti",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --turbopack",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "firebase": "^11.0.1",
+    "next": "15.0.3",
+    "react": "19.0.0-rc-66855b96-20241106",
+    "react-alert": "^7.0.3",
+    "react-dom": "19.0.0-rc-66855b96-20241106",
+    "react-firebase-hooks": "^5.1.1"
+  },
+  "devDependencies": {
+    "postcss": "^8",
+    "tailwindcss": "^3.4.1"
+  }
+}
