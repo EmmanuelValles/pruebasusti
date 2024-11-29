@@ -78,17 +78,17 @@ function Dashboard() {
         <div className="bg-white rounded-lg shadow p-6">
           <div className="flex justify-between mb-4">
             <div className="text-center">
-              <h2 className="font-semibold text-lg">Citas pendientes:</h2>
-              <p className="text-2xl font-bold">12</p>
+              <h2 className="font-semibold text-black text-lg">Citas pendientes:</h2>
+              <p className="text-2xl text-gray-500 font-bold">XX</p>
             </div>
             <div className="text-center">
-              <h2 className="font-semibold text-lg">Cotizaciones pendientes:</h2>
-              <p className="text-2xl font-bold">12</p>
+              <h2 className="font-semibold text-black text-lg">Cotizaciones pendientes:</h2>
+              <p className="text-2xl text-gray-500 font-bold">XX</p>
             </div>
           </div>
 
           <div className="mt-6 border-t pt-6">
-            <p className="text-center text-gray-500">Calendar will go here</p>
+            <p className="text-center text-gray-500">Espacio para calendario</p>
           </div>
         </div>
       </div>

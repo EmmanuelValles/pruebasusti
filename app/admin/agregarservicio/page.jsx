@@ -33,6 +33,15 @@ function AgregarServicio() {
   if (!user) {
     return <p>Cargando...</p>; // Mostrar algo mientras se verifica la autenticación
   }
+  const handleSignOut = async () => {
+    try {
+      await auth.signOut();
+      router.push('/admin/sign-in'); // Redirigir al login después de cerrar sesión
+    } catch (error) {
+      console.error('Error al cerrar sesión:', error);
+      // Implementar manejo de errores personalizado (opcional)
+    }
+  };
 
   const handleFileChange = (e) => {
     const files = Array.from(e.target.files);
