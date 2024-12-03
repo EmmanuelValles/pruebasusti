@@ -1,10 +1,9 @@
-'use client'
+'use client';
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { db, storage } from '@/app/firebase/config';
-import { collection, doc, getDocs, getDoc, updateDoc } from 'firebase/firestore';
+import { db } from '@/app/firebase/config';
+import { collection, doc, getDocs, getDoc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { auth } from '@/app/firebase/config';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 function ModificarServicio() {
   const router = useRouter();
@@ -18,6 +17,7 @@ function ModificarServicio() {
   const [imagenes, setImagenes] = useState([]);
   const [previews, setPreviews] = useState([]);
   const [subiendo, setSubiendo] = useState(false);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged((currentUser) => {
@@ -54,7 +54,11 @@ function ModificarServicio() {
       setNombre(data.nombre);
       setDescripcion(data.descripcion);
       setRangoPrecios(data.rangoPrecios);
-      setPreviews(data.imagenes || []);
+
+      // Obtener las imágenes de la subcolección "imagenes"
+      const imagenesSnapshot = await getDocs(collection(docRef, "imagenes"));
+      const imagenesList = imagenesSnapshot.docs.map(doc => doc.data().url);
+      setPreviews(imagenesList);
     } else {
       console.error("Servicio no encontrado");
     }
@@ -72,30 +76,69 @@ function ModificarServicio() {
     const enlaces = [];
 
     for (let imagen of imagenes) {
-      const imagenRef = ref(storage, `servicios/${nombre}/${imagen.name}`);
-      await uploadBytes(imagenRef, imagen);
-      const url = await getDownloadURL(imagenRef);
-      enlaces.push(url);
+      const formData = new FormData();
+      formData.append('file', imagen);
+      formData.append('upload_preset', 'susticorpcloudinary'); // Usar el preset de Cloudinary
+      formData.append('cloud_name', 'dqigc5zir'); // Usar el nombre de tu Cloudinary
+
+      const response = await fetch('https://api.cloudinary.com/v1_1/dqigc5zir/image/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await response.json();
+      enlaces.push(data.secure_url); // La URL segura que Cloudinary devuelve
     }
 
     return enlaces;
   };
 
+  const eliminarImagen = async (url) => {
+    try {
+      // Eliminar de Firestore
+      const docRef = doc(db, "servicios", selectedServicio);
+      const imagenesCollection = collection(docRef, "imagenes");
+      const imagenSnap = await getDocs(imagenesCollection);
+      const imagenDoc = imagenSnap.docs.find(doc => doc.data().url === url);
+      if (imagenDoc) {
+        await deleteDoc(imagenDoc.ref);
+      }
+
+      // Actualizar el estado
+      setPreviews((prev) => prev.filter((preview) => preview !== url));
+    } catch (error) {
+      console.error("Error al eliminar la imagen: ", error);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSubiendo(true);
-
+  
+    // Validación para asegurarse de que rangoPrecios no esté vacío
+    if (!nombre || !descripcion || !rangoPrecios) {
+      alert("Todos los campos son obligatorios.");
+      setSubiendo(false);
+      return;
+    }
+  
     try {
       const enlacesImagenes = await subirImagenes();
       const docRef = doc(db, "servicios", selectedServicio);
-
+  
+      // Actualiza el documento solo si los campos tienen valores válidos
       await updateDoc(docRef, {
         nombre,
         descripcion,
-        rangoPrecios,
-        imagenes: [...previews, ...enlacesImagenes],
+        rangoPrecios: rangoPrecios || "",  // Asegurando que no sea undefined
       });
-
+  
+      // Actualizar las imágenes en la subcolección "imagenes"
+      const imagenesCollection = collection(docRef, "imagenes");
+      enlacesImagenes.forEach(async (url) => {
+        await updateDoc(imagenesCollection, { url });
+      });
+  
       console.log("Servicio actualizado correctamente");
       router.push('/admin/dashboard');
     } catch (error) {
@@ -104,112 +147,155 @@ function ModificarServicio() {
       setSubiendo(false);
     }
   };
+  
 
   if (!user) {
     return <p>Cargando...</p>;
   }
 
   return (
-    <div className="flex min-h-screen bg-gray-300">
-      {/* Lista de servicios */}
-      <div className="w-1/3 bg-white shadow-lg p-4">
-        <header className="flex justify-between mb-4">
-          <button
-            onClick={() => router.back()}
-            className="bg-teal-900 text-white py-1 px-3 rounded-lg font-bold"
-          >
-            Volver
+    <div className="flex min-h-screen bg-gray-100">
+      {/* Sidebar */}
+      <div className={`fixed inset-0 z-20 bg-teal-900 text-white p-6 transform ${isMenuOpen ? 'translate-x-0' : '-translate-x-full'} transition-transform duration-300 ease-in-out lg:relative lg:translate-x-0 lg:w-64`}>
+        <div className="flex items-center justify-between mb-8 lg:hidden">
+          <h1 className="text-lg font-bold">Susticorp</h1>
+          <button onClick={() => setIsMenuOpen(false)} className="text-white">
+            <span className="material-icons">close</span>
           </button>
-          <h2 className="text-xl text-black font-bold">Servicios</h2>
-          <div className="w-8"></div> {/* Espacio para balancear el diseño */}
-        </header>
-        <ul className="space-y-2">
-          {servicios.map(servicio => (
-            <li
-              key={servicio.id}
-              className={`p-2 rounded-lg text-slate-950 cursor-pointer ${selectedServicio === servicio.id ? 'bg-teal-300' : 'hover:bg-teal-100'}`}
-              onClick={() => selectServicio(servicio.id)}
-            >
-              {servicio.nombre}
+        </div>
+        <div className="flex flex-col items-center mb-10">
+          <img src="https://res.cloudinary.com/dqigc5zir/image/upload/v1733178017/nplcp7t5yc0czt7pctwc.png" alt="Susticorp Logo" className="w-16 h-16 mb-4" />
+          <h1 className="text-lg font-semibold">Susticorp</h1>
+        </div>
+        <ul className="space-y-4">
+          {[{ label: 'Citas', path: '/admin/citas' }, { label: 'Cotizaciones', path: '/admin/cotizaciones' }, { label: 'Añadir servicio', path: '/admin/agregarservicio' }, { label: 'Modificar servicio', path: '/admin/modificarservicio' }].map(({ label, path }) => (
+            <li key={path}>
+              <button onClick={() => router.push(path)} className="flex items-center space-x-2 hover:text-teal-400">
+                <span>{label}</span>
+              </button>
             </li>
           ))}
+          <li>
+            <button onClick={() => router.push('/admin/sign-in')} className="flex items-center space-x-2 hover:text-teal-400">
+              <span>Cerrar sesión</span>
+            </button>
+          </li>
         </ul>
       </div>
 
-      {/* Formulario de edición */}
-      <div className="w-2/3 bg-white shadow-lg p-8">
-        {selectedServicio ? (
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <h2 className="text-xl text-slate-950 font-bold">Modificar servicio</h2>
+      {/* Main Content */}
+      <div className="flex-1 p-6 ml-64 lg:ml-0">
+        {/* Header */}
+        <header className="flex items-center justify-between mb-8 lg:hidden">
+          <h1 className="text-2xl font-bold text-black">Modificar servicio</h1>
+          <button onClick={() => setIsMenuOpen(true)} className="text-gray-800">
+            <span className="material-icons">menu</span>
+          </button>
+        </header>
 
-            <label className="text-gray-600 font-semibold">
-              Nombre:
-              <input
-                type="text"
-                value={nombre}
-                onChange={(e) => setNombre(e.target.value)}
-                placeholder="Ingrese el nombre del servicio"
-                className="border rounded-lg w-full p-2 mt-1"
-                required
-              />
-            </label>
+        <div className="flex gap-8">
+          {/* Service List */}
+          <div className="w-1/3">
+            <h2 className="text-xl font-semibold text-teal-900 mb-4">Lista de servicios</h2>
+            <ul className="space-y-2">
+              {servicios.map(servicio => (
+                <li
+                  key={servicio.id}
+                  className={`p-2 rounded-lg text-slate-950 cursor-pointer ${selectedServicio === servicio.id ? 'bg-teal-300' : 'hover:bg-teal-100'}`}
+                  onClick={() => selectServicio(servicio.id)}
+                >
+                  {servicio.nombre}
+                </li>
+              ))}
+            </ul>
+          </div>
 
-            <label className="text-gray-600 font-semibold">
-              Descripción:
-              <textarea
-                value={descripcion}
-                onChange={(e) => setDescripcion(e.target.value)}
-                placeholder="Describa el servicio"
-                className="border rounded-lg w-full p-2 mt-1"
-                rows="4"
-                required
-              />
-            </label>
+          {/* Service Form */}
+          <div className="w-2/3 bg-white rounded-lg shadow p-6">
+            {selectedServicio ? (
+              <form onSubmit={handleSubmit} className="space-y-6">
+                <header className="flex justify-between mb-6">
+                  <h2 className="text-xl text-black font-bold">Modificar servicio</h2>
+                  <div className="w-8"></div>
+                </header>
 
-            <label className="text-gray-600 font-semibold">
-              Rango de precios:
-              <input
-                type="text"
-                value={rangoPrecios}
-                onChange={(e) => setRangoPrecios(e.target.value)}
-                placeholder="Ingrese el rango de precios"
-                className="border rounded-lg w-full p-2 mt-1"
-                required
-              />
-            </label>
+                <label className="text-gray-600 font-semibold">
+                  Nombre:
+                  <input
+                    type="text"
+                    value={nombre}
+                    onChange={(e) => setNombre(e.target.value)}
+                    placeholder="Ingrese el nombre del servicio"
+                    className="border rounded-lg w-full p-2 mt-1"
+                    required
+                  />
+                </label>
 
-            <label className="text-gray-600 font-semibold">
-              Imágenes:
-              <input
-                type="file"
-                multiple
-                onChange={handleFileChange}
-                className="border rounded-lg w-full p-2 mt-1"
-                accept="image/*"
-              />
-            </label>
+                <label className="text-gray-600 font-semibold">
+                  Descripción:
+                  <textarea
+                    value={descripcion}
+                    onChange={(e) => setDescripcion(e.target.value)}
+                    placeholder="Describa el servicio"
+                    className="border rounded-lg w-full p-2 mt-1"
+                    rows="4"
+                    required
+                  />
+                </label>
 
-            {previews.length > 0 && (
-              <div className="flex flex-wrap gap-2 mt-4">
-                {previews.map((preview, index) => (
-                  <div key={index} className="w-24 h-24 border rounded-lg overflow-hidden">
-                    <img src={preview} alt={`Preview ${index}`} className="w-full h-full object-cover" />
+                <label className="text-gray-600 font-semibold">
+                  Rango de precios:
+                  <input
+                    type="text"
+                    value={rangoPrecios}
+                    onChange={(e) => setRangoPrecios(e.target.value)}
+                    placeholder="Ingrese el rango de precios"
+                    className="border rounded-lg w-full p-2 mt-1"
+                    required
+                  />
+                </label>
+
+                <label className="text-gray-600 font-semibold">
+                  Imágenes:
+                  <input
+                    type="file"
+                    multiple
+                    onChange={handleFileChange}
+                    className="border rounded-lg w-full p-2 mt-1"
+                    accept="image/*"
+                  />
+                </label>
+
+                {/* Mostrar imágenes */}
+                {previews.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mt-4">
+                    {previews.map((preview, index) => (
+                      <div key={index} className="relative w-24 h-24 border rounded-lg overflow-hidden">
+                        <img src={preview} alt={`Preview ${index}`} className="w-full h-full object-cover" />
+                        <button
+                          onClick={() => eliminarImagen(preview)}
+                          className="absolute top-0 right-0 text-red-600 font-bold"
+                        >
+                          X
+                        </button>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            )}
+                )}
 
-            <button
-              type="submit"
-              className={`w-full ${subiendo ? 'bg-gray-400' : 'bg-teal-900'} text-white py-2 rounded-lg font-bold mt-6`}
-              disabled={subiendo}
-            >
-              {subiendo ? 'Actualizando...' : 'Modificar servicio'}
-            </button>
-          </form>
-        ) : (
-          <p className="text-slate-950">Seleccione un servicio para modificarlo.</p>
-        )}
+                <button
+                  type="submit"
+                  className={`w-full ${subiendo ? 'bg-gray-400' : 'bg-teal-900'} text-white py-2 rounded-lg font-bold mt-6`}
+                  disabled={subiendo}
+                >
+                  {subiendo ? 'Actualizando...' : 'Modificar servicio'}
+                </button>
+              </form>
+            ) : (
+              <p className="text-slate-950">Seleccione un servicio para modificarlo.</p>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -9,6 +9,7 @@ function Citas() {
   const [citas, setCitas] = useState([]); // Lista de citas filtradas
   const [citaSeleccionada, setCitaSeleccionada] = useState(null); // Cita activa
   const [servicioSeleccionado, setServicioSeleccionado] = useState(''); // Filtro de servicio
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   const router = useRouter();
 
@@ -70,34 +71,57 @@ function Citas() {
   };
 
   return (
-    <div className="flex min-h-screen bg-gray-300">
+    <div className="flex min-h-screen bg-gray-100">
       {/* Sidebar */}
-      <div className="fixed inset-0 z-20 bg-teal-900 text-white p-6 transform translate-x-0 lg:relative lg:translate-x-0 lg:w-64 lg:bg-white lg:text-black">
+      <div className={`fixed inset-0 z-20 bg-teal-900 text-white p-6 transform ${isMenuOpen ? 'translate-x-0' : '-translate-x-full'} transition-transform duration-300 ease-in-out lg:relative lg:translate-x-0 lg:w-64`}>
         <div className="flex items-center justify-between mb-8 lg:hidden">
-          <h1 className="text-lg text-black font-bold">Susticorp</h1>
+          <h1 className="text-lg font-bold">Susticorp</h1>
+          <button onClick={() => setIsMenuOpen(false)} className="text-white">
+            <span className="material-icons">close</span>
+          </button>
         </div>
+        <div className="flex flex-col items-center mb-10">
+          <img src="https://res.cloudinary.com/dqigc5zir/image/upload/v1733178017/nplcp7t5yc0czt7pctwc.png" alt="Susticorp Logo" className="w-16 h-16 mb-4" />
+          <h1 className="text-lg font-semibold">Susticorp</h1>
+        </div>
+        <ul className="space-y-4">
+          {[{ label: 'Citas', path: '/admin/citas' }, { label: 'Cotizaciones', path: '/admin/cotizaciones' }, { label: 'Añadir servicio', path: '/admin/agregarservicio' }, { label: 'Modificar servicio', path: '/admin/modificarservicio' }].map(({ label, path }) => (
+            <li key={path}>
+              <button onClick={() => router.push(path)} className="flex items-center space-x-2 hover:text-teal-400">
+                <span>{label}</span>
+              </button>
+            </li>
+          ))}
+          <li>
+            <button onClick={() => handleVolver()} className="flex items-center space-x-2 hover:text-teal-400">
+              <span>Cerrar sesión</span>
+            </button>
+          </li>
+        </ul>
       </div>
 
       {/* Main Content */}
       <div className="flex-1 p-6">
-        <header className="flex items-center justify-between mb-8">
-          <h1 className="text-2xl text-black font-bold">Citas</h1>
-          {/* Botón de agregar cita */}
-          <button
-            className="bg-teal-800 text-white px-4 py-2 rounded"
-            onClick={() => router.push('/admin/agregarcita')}
-          >
-            Agregar cita
+        <header className="flex items-center justify-between mb-8 lg:hidden">
+          <h1 className="text-2xl font-bold">Citas</h1>
+          <button onClick={() => setIsMenuOpen(true)} className="text-gray-800">
+            <span className="material-icons">menu</span>
           </button>
         </header>
 
-        {/* Botón Volver */}
-        <div className="mb-4">
+        {/* Botones Volver y Agregar Cita */}
+        <div className="flex justify-between mb-4">
           <button
             className="bg-teal-800 text-white px-4 py-2 rounded"
             onClick={handleVolver}
           >
             Volver
+          </button>
+          <button
+            className="bg-teal-800 text-white px-4 py-2 rounded"
+            onClick={() => router.push('/admin/agregarcita')}
+          >
+            Agregar cita
           </button>
         </div>
 

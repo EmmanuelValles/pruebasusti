@@ -4,16 +4,18 @@ import { useRouter } from 'next/navigation';
 import { db, auth } from '@/app/firebase/config'; // Importa la configuración de Firebase
 import { collection, getDocs, doc, getDoc, addDoc } from 'firebase/firestore';
 
-function AgregarCita() {
+function AgregarCotizacion() {
   const [servicios, setServicios] = useState([]); // Lista de servicios disponibles
   const [formData, setFormData] = useState({
     clienteNombre: '',
-    fecha: '', // Campo de fecha
-    hora: '',
-    servicio: '', // ID del servicio
-    telefono: '',
     correo: '',
     direccion: '',
+    estatus: 'Pendiente', // Estado inicial de la cotización
+    fechaSolicitud: '',
+    servicio: '', // ID del servicio
+    descripcion: '',
+    telefono: '',
+    costoEstimado: '', // Nuevo campo de costo estimado
   });
   const router = useRouter();
   const [user, setUser] = useState(null);
@@ -52,11 +54,11 @@ function AgregarCita() {
     setFormData({ ...formData, [name]: value });
   };
 
-  // Agregar cita a Firestore
-  const agregarCita = async () => {
-    const { clienteNombre, fecha, hora, servicio, telefono, correo, direccion } = formData;
+  // Agregar cotización a Firestore
+  const agregarCotizacion = async () => {
+    const { clienteNombre, correo, direccion, estatus, fechaSolicitud, servicio, descripcion, telefono, costoEstimado } = formData;
 
-    if (!clienteNombre || !fecha || !hora || !servicio || !telefono || !correo || !direccion) {
+    if (!clienteNombre || !correo || !direccion || !fechaSolicitud || !servicio || !descripcion || !telefono || !costoEstimado) {
       alert('Por favor, completa todos los campos.');
       return;
     }
@@ -73,25 +75,26 @@ function AgregarCita() {
 
       const nombreServicio = servicioSnapshot.data().nombre;
 
-      // Luego, guardar la cita con el nombre del servicio
-      const citasCollectionRef = collection(servicioRef, 'citas'); // Subcolección "citas"
+      // Luego, guardar la cotización con el nombre del servicio y costo estimado
+      const cotizacionesCollectionRef = collection(servicioRef, 'cotizaciones'); // Subcolección "cotizaciones"
 
-      await addDoc(citasCollectionRef, {
+      await addDoc(cotizacionesCollectionRef, {
         clienteNombre,
-        fecha,
-        hora,
-        servicio: nombreServicio, // Guardamos el nombre del servicio
-        estado: 'Pendiente', // Se guarda automáticamente como "Pendiente"
-        telefono,
         correo,
         direccion,
+        estatus,
+        fechaSolicitud,
+        servicio: nombreServicio, // Guardamos el nombre del servicio
+        descripcion,
+        telefono,
+        costoEstimado, // Guardamos el costo estimado
       });
 
-      alert('Cita agregada correctamente.');
-      router.push('/admin/citas'); // Redirigir a la página de citas
+      alert('Cotización agregada correctamente.');
+      router.push('/admin/cotizaciones'); // Redirigir a la página de cotizaciones
     } catch (error) {
-      console.error('Error al agregar la cita:', error);
-      alert('Ocurrió un error al agregar la cita.');
+      console.error('Error al agregar la cotización:', error);
+      alert('Ocurrió un error al agregar la cotización.');
     }
   };
 
@@ -129,7 +132,7 @@ function AgregarCita() {
       <div className="flex-1 p-6">
         {/* Header */}
         <header className="flex items-center justify-between mb-8 lg:hidden">
-          <h1 className="text-2xl font-bold text-black">Agregar cita</h1>
+          <h1 className="text-2xl font-bold text-black">Agregar cotización</h1>
           <button onClick={() => setIsMenuOpen(true)} className="text-gray-800">
             <span className="material-icons">menu</span>
           </button>
@@ -137,7 +140,7 @@ function AgregarCita() {
 
         {/* Formulario */}
         <div className="bg-white rounded-lg shadow p-6">
-          <h2 className="font-bold text-gray-600 text-lg mb-4">Información de la cita:</h2>
+          <h2 className="font-bold text-gray-600 text-lg mb-4">Información de la cotización:</h2>
 
           <div className="grid grid-cols-1 gap-4">
             {/* Nombre del cliente */}
@@ -149,60 +152,6 @@ function AgregarCita() {
                 value={formData.clienteNombre}
                 onChange={handleChange}
                 className="w-full text-gray-600 p-2 border rounded"
-              />
-            </div>
-
-            {/* Fecha */}
-            <div>
-              <label className="block text-gray-600 font-semibold mb-2">Fecha:</label>
-              <input
-                type="date"
-                name="fecha"
-                value={formData.fecha}
-                onChange={handleChange}
-                className="w-full p-2 text-gray-600 border rounded"
-              />
-            </div>
-
-            {/* Hora */}
-            <div>
-              <label className="block text-gray-600 font-semibold mb-2">Hora:</label>
-              <input
-                type="time"
-                name="hora"
-                value={formData.hora}
-                onChange={handleChange}
-                className="w-full p-2 text-gray-600 border rounded"
-              />
-            </div>
-
-            {/* Servicio */}
-            <div>
-              <label className="block text-gray-600 font-semibold mb-2">Servicio:</label>
-              <select
-                name="servicio"
-                value={formData.servicio}
-                onChange={handleChange}
-                className="w-full p-2 text-gray-600 border rounded"
-              >
-                <option value="">Selecciona</option>
-                {servicios.map((servicio) => (
-                  <option key={servicio.id} value={servicio.id}>
-                    {servicio.nombre}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Teléfono */}
-            <div>
-              <label className="block text-gray-600 font-semibold mb-2">Teléfono:</label>
-              <input
-                type="text"
-                name="telefono"
-                value={formData.telefono}
-                onChange={handleChange}
-                className="w-full p-2 border text-gray-600 rounded"
               />
             </div>
 
@@ -229,15 +178,80 @@ function AgregarCita() {
                 className="w-full p-2 text-gray-600 border rounded"
               />
             </div>
+
+            {/* Fecha de solicitud */}
+            <div>
+              <label className="block text-gray-600 font-semibold mb-2">Fecha de solicitud:</label>
+              <input
+                type="date"
+                name="fechaSolicitud"
+                value={formData.fechaSolicitud}
+                onChange={handleChange}
+                className="w-full p-2 text-gray-600 border rounded"
+              />
+            </div>
+
+            {/* Servicio */}
+            <div>
+              <label className="block text-gray-600 font-semibold mb-2">Servicio:</label>
+              <select
+                name="servicio"
+                value={formData.servicio}
+                onChange={handleChange}
+                className="w-full p-2 text-gray-600 border rounded"
+              >
+                <option value="">Selecciona</option>
+                {servicios.map((servicio) => (
+                  <option key={servicio.id} value={servicio.id}>
+                    {servicio.nombre}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Descripción */}
+            <div>
+              <label className="block text-gray-600 font-semibold mb-2">Descripción:</label>
+              <textarea
+                name="descripcion"
+                value={formData.descripcion}
+                onChange={handleChange}
+                className="w-full p-2 text-gray-600 border rounded"
+              />
+            </div>
+
+            {/* Teléfono */}
+            <div>
+              <label className="block text-gray-600 font-semibold mb-2">Teléfono:</label>
+              <input
+                type="text"
+                name="telefono"
+                value={formData.telefono}
+                onChange={handleChange}
+                className="w-full p-2 text-gray-600 border rounded"
+              />
+            </div>
+
+            {/* Costo estimado */}
+            <div>
+              <label className="block text-gray-600 font-semibold mb-2">Costo estimado:</label>
+              <input
+                type="text"
+                name="costoEstimado"
+                value={formData.costoEstimado}
+                onChange={handleChange}
+                className="w-full p-2 text-gray-600 border rounded"
+              />
+            </div>
           </div>
 
-          {/* Botón para agregar cita */}
+          {/* Botón para agregar cotización */}
           <div className="mt-6">
             <button
               className="bg-teal-800 text-white px-4 py-2 rounded w-full"
-              onClick={agregarCita}
+              onClick={agregarCotizacion}
             >
-              Agregar cita
+              Agregar cotización
             </button>
           </div>
         </div>
@@ -246,4 +260,4 @@ function AgregarCita() {
   );
 }
 
-export default AgregarCita;
+export default AgregarCotizacion;

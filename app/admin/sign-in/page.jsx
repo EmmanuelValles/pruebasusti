@@ -31,7 +31,7 @@ function SignIn() {
     <div className="flex items-center justify-center min-h-screen bg-gray-300 relative">
       <div className="absolute top-4 left-4 flex items-center">
         <img
-          src="https://firebasestorage.googleapis.com/v0/b/susticorpbd.firebasestorage.app/o/susticorp%2Flogos%2Flogo.png?alt=media&token=86254d1a-b77f-4299-be55-41ab6af00615"
+          src="https://res.cloudinary.com/dqigc5zir/image/upload/v1733178017/nplcp7t5yc0czt7pctwc.png"
           alt="SUSTICORP Logo"
           className="w-8 h-8 mr-2"
         />
