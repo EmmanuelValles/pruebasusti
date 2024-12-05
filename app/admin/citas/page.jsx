@@ -2,18 +2,19 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { db } from '@/app/firebase/config'; // Importa la configuración de Firebase
-import { collection, query, getDocs, onSnapshot } from 'firebase/firestore';
+import { collection, query, getDocs, onSnapshot, doc, updateDoc } from 'firebase/firestore';
 
 function Citas() {
-  const [servicios, setServicios] = useState([]); // Lista de servicios
-  const [citas, setCitas] = useState([]); // Lista de citas filtradas
-  const [citaSeleccionada, setCitaSeleccionada] = useState(null); // Cita activa
-  const [servicioSeleccionado, setServicioSeleccionado] = useState(''); // Filtro de servicio
+  const [servicios, setServicios] = useState([]);
+  const [citas, setCitas] = useState([]);
+  const [filteredCitas, setFilteredCitas] = useState([]);
+  const [citaSeleccionada, setCitaSeleccionada] = useState(null);
+  const [servicioSeleccionado, setServicioSeleccionado] = useState('');
+  const [estadoSeleccionado, setEstadoSeleccionado] = useState('');
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   const router = useRouter();
 
-  // Obtener lista de servicios al cargar la página
   useEffect(() => {
     const fetchServicios = async () => {
       const serviciosRef = collection(db, 'servicios');
@@ -28,16 +29,13 @@ function Citas() {
     fetchServicios();
   }, []);
 
-  // Obtener citas según el servicio seleccionado
   useEffect(() => {
     const fetchCitas = async () => {
       let citasQuery;
       if (servicioSeleccionado && servicioSeleccionado !== 'todos') {
-        // Obtener citas solo de un servicio específico
         const citasRef = collection(db, 'servicios', servicioSeleccionado, 'citas');
         citasQuery = citasRef;
       } else {
-        // Obtener todas las citas de todos los servicios
         citasQuery = collection(db, 'servicios');
       }
 
@@ -49,25 +47,79 @@ function Citas() {
         setCitas(citasList);
       });
 
-      return () => unsubscribe(); // Limpiar la suscripción
+      return () => unsubscribe();
     };
 
     fetchCitas();
   }, [servicioSeleccionado]);
 
-  // Cambiar estado de la cita
-  const cambiarEstado = (id) => {
-    console.log('Cambiando estado de la cita:', id);
-  };
+  useEffect(() => {
+    const filtered = estadoSeleccionado
+      ? citas.filter((cita) => cita.estado === estadoSeleccionado)
+      : citas;
+    setFilteredCitas(filtered);
+  }, [estadoSeleccionado, citas]);
 
-  // Cancelar cita
-  const cancelarCita = (id) => {
-    console.log('Cancelando cita:', id);
-  };
+  const cambiarEstado = async (id) => {
+  const confirmation = window.confirm('¿Estás seguro de marcar la cita como Atendida?');
+  if (!confirmation) return;
 
-  // Manejo de volver a la página principal
+  try {
+    // Determine correct document reference
+    let citaDocRef;
+
+    if (servicioSeleccionado && servicioSeleccionado !== 'todos') {
+      // If citas are nested under a specific service
+      citaDocRef = doc(db, 'servicios', servicioSeleccionado, 'citas', id);
+    } else {
+      // If citas are in a top-level collection
+      citaDocRef = doc(db, 'citas', id);
+    }
+
+    console.log('Updating document at:', citaDocRef.path);
+
+    // Update Firestore document
+    await updateDoc(citaDocRef, { estado: 'Atendida' });
+
+    alert('La cita ha sido marcada como Atendida.');
+  } catch (error) {
+    console.error('Error al cambiar el estado de la cita:', error);
+    alert('Hubo un error al cambiar el estado de la cita.');
+  }
+};
+
+
+  const cancelarCita = async (id) => {
+    const confirmation = window.confirm('¿Estás seguro de cancelar la cita?');
+    if (!confirmation) return;
+  
+    try {
+      // Determine correct document reference
+      let citaDocRef;
+  
+      if (servicioSeleccionado && servicioSeleccionado !== 'todos') {
+        // If citas are nested under a specific service
+        citaDocRef = doc(db, 'servicios', servicioSeleccionado, 'citas', id);
+      } else {
+        // If citas are in a top-level collection
+        citaDocRef = doc(db, 'citas', id);
+      }
+  
+      console.log('Updating document at:', citaDocRef.path);
+  
+      // Update Firestore document
+      await updateDoc(citaDocRef, { estado: 'Cancelada' });
+  
+      alert('La cita ha sido cancelada.');
+    } catch (error) {
+      console.error('Error al cancelar la cita:', error);
+      alert('Hubo un error al cancelar la cita.');
+    }
+  };
+  
+
   const handleVolver = () => {
-    router.push('/admin/dashboard'); // Ruta para regresar a la página principal
+    router.push('/admin/dashboard');
   };
 
   return (
@@ -79,10 +131,6 @@ function Citas() {
           <button onClick={() => setIsMenuOpen(false)} className="text-white">
             <span className="material-icons">close</span>
           </button>
-        </div>
-        <div className="flex flex-col items-center mb-10">
-          <img src="https://res.cloudinary.com/dqigc5zir/image/upload/v1733178017/nplcp7t5yc0czt7pctwc.png" alt="Susticorp Logo" className="w-16 h-16 mb-4" />
-          <h1 className="text-lg font-semibold">Susticorp</h1>
         </div>
         <ul className="space-y-4">
           {[{ label: 'Citas', path: '/admin/citas' }, { label: 'Cotizaciones', path: '/admin/cotizaciones' }, { label: 'Añadir servicio', path: '/admin/agregarservicio' }, { label: 'Modificar servicio', path: '/admin/modificarservicio' }].map(({ label, path }) => (
@@ -102,76 +150,77 @@ function Citas() {
 
       {/* Main Content */}
       <div className="flex-1 p-6">
-        <header className="flex items-center justify-between mb-8 lg:hidden">
-          <h1 className="text-2xl font-bold">Citas</h1>
-          <button onClick={() => setIsMenuOpen(true)} className="text-gray-800">
-            <span className="material-icons">menu</span>
-          </button>
-        </header>
-
-        {/* Botones Volver y Agregar Cita */}
-        <div className="flex justify-between mb-4">
-          <button
-            className="bg-teal-800 text-white px-4 py-2 rounded"
-            onClick={handleVolver}
-          >
+        <div className="flex justify-between items-center mb-4">
+          <button className="bg-teal-800 text-white px-4 py-2 rounded" onClick={handleVolver}>
             Volver
           </button>
-          <button
-            className="bg-teal-800 text-white px-4 py-2 rounded"
-            onClick={() => router.push('/admin/agregarcita')}
-          >
+          <button className="bg-teal-800 text-white px-4 py-2 rounded" onClick={() => router.push('/admin/agregarcita')}>
             Agregar cita
           </button>
         </div>
 
-        {/* Dropdown para filtrar servicios */}
-        <div className="mb-4">
-          <label htmlFor="servicios" className="block text-black font-semibold mb-2">
-            Próximas citas:
-          </label>
-          <select
-            id="servicios"
-            className="w-full p-2 text-gray-600 border rounded"
-            value={servicioSeleccionado}
-            onChange={(e) => setServicioSeleccionado(e.target.value)}
-          >
-            <option value="todos">Todos los servicios</option>
-            {servicios.map((servicio) => (
-              <option key={servicio.id} value={servicio.id}>
-                {servicio.nombre}
-              </option>
-            ))}
-          </select>
+        <div className="flex justify-between items-center mb-4">
+          <div>
+            <label htmlFor="servicios" className="block text-black font-semibold mb-2">
+              Próximas citas:
+            </label>
+            <select
+              id="servicios"
+              className="w-full p-2 text-gray-600 border rounded"
+              value={servicioSeleccionado}
+              onChange={(e) => setServicioSeleccionado(e.target.value)}
+            >
+              <option value="todos">Todos los servicios</option>
+              {servicios.map((servicio) => (
+                <option key={servicio.id} value={servicio.id}>
+                  {servicio.nombre}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label htmlFor="estado" className="block text-black font-semibold mb-2">
+              Filtrar por estado:
+            </label>
+            <select
+              id="estado"
+              className="w-full p-2 text-gray-600 border rounded"
+              value={estadoSeleccionado}
+              onChange={(e) => setEstadoSeleccionado(e.target.value)}
+            >
+              <option value="">Todos</option>
+              <option value="Pendiente">Pendiente</option>
+              <option value="Cancelada">Cancelada</option>
+              <option value="Atendida">Atendida</option>
+            </select>
+          </div>
         </div>
 
         <div className="flex">
-          {/* Lista de citas */}
           <div className="w-1/3 text-gray-600 bg-white rounded-lg shadow p-4 mr-4">
-            {citas.map((cita) => (
+            {filteredCitas.map((cita) => (
               <div
                 key={cita.id}
                 className={`p-2 mb-2 cursor-pointer rounded ${citaSeleccionada?.id === cita.id ? 'bg-teal-100' : 'hover:bg-gray-100'}`}
                 onClick={() => setCitaSeleccionada(cita)}
               >
                 <p>{cita.fecha} {cita.hora}</p>
+                <p>{cita.clienteNombre}</p>
               </div>
             ))}
           </div>
 
-          {/* Detalles de la cita seleccionada */}
           <div className="flex-1 bg-white rounded-lg shadow p-4">
             {citaSeleccionada ? (
               <>
                 <h2 className="font-bold text-black text-lg mb-4">Información:</h2>
-                <p className='text-gray-600'><strong>Fecha:</strong> {citaSeleccionada.fecha}</p>
-                <p className='text-gray-600'><strong>Hora:</strong> {citaSeleccionada.hora}</p>
-                <p className='text-gray-600'><strong>Servicio:</strong> {citaSeleccionada.servicio}</p>
-                <p className='text-gray-600'><strong>Estado:</strong> {citaSeleccionada.estado}</p>
-                <p className='text-gray-600'><strong>Nombre del cliente:</strong> {citaSeleccionada.clienteNombre}</p>
-                <p className='text-gray-600'><strong>Teléfono:</strong> {citaSeleccionada.telefono}</p>
-                <p className='text-gray-600'><strong>Correo:</strong> {citaSeleccionada.correo}</p>
-                <p className='text-gray-600'><strong>Dirección:</strong> {citaSeleccionada.direccion}</p>
+                <p className="text-gray-600"><strong>Fecha:</strong> {citaSeleccionada.fecha}</p>
+                <p className="text-gray-600"><strong>Estado:</strong> {citaSeleccionada.estado}</p>
+                <p className="text-gray-600"><strong>Nombre del cliente:</strong> {citaSeleccionada.clienteNombre}</p>
+                <p className="text-gray-600"><strong>Teléfono:</strong> {citaSeleccionada.telefono}</p>
+                <p className="text-gray-600"><strong>Correo:</strong> {citaSeleccionada.correo}</p>
+                <p className="text-gray-600"><strong>Dirección:</strong> {citaSeleccionada.direccion}</p>
 
                 <div className="mt-4 flex justify-between">
                   <button
