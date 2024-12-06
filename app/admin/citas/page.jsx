@@ -1,8 +1,11 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { db } from '@/app/firebase/config'; // Importa la configuración de Firebase
-import { collection, query, getDocs, onSnapshot, doc, updateDoc } from 'firebase/firestore';
+import { db } from '@/app/firebase/config';
+import { collection, getDocs, onSnapshot, doc, updateDoc } from 'firebase/firestore';
+import Swal from 'sweetalert2';
+import 'sweetalert2/dist/sweetalert2.min.css';
+import Navbar from '@/app/components/navbar'
 
 function Citas() {
   const [servicios, setServicios] = useState([]);
@@ -61,62 +64,80 @@ function Citas() {
   }, [estadoSeleccionado, citas]);
 
   const cambiarEstado = async (id) => {
-  const confirmation = window.confirm('¿Estás seguro de marcar la cita como Atendida?');
-  if (!confirmation) return;
+    const result = await Swal.fire({
+      title: '¿Estás seguro?',
+      text: 'Esta acción marcará la cita como Atendida.',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Sí, marcar como Atendida',
+      cancelButtonText: 'Cancelar',
+    });
 
-  try {
-    // Determine correct document reference
-    let citaDocRef;
+    if (!result.isConfirmed) return;
 
-    if (servicioSeleccionado && servicioSeleccionado !== 'todos') {
-      // If citas are nested under a specific service
-      citaDocRef = doc(db, 'servicios', servicioSeleccionado, 'citas', id);
-    } else {
-      // If citas are in a top-level collection
-      citaDocRef = doc(db, 'citas', id);
-    }
-
-    console.log('Updating document at:', citaDocRef.path);
-
-    // Update Firestore document
-    await updateDoc(citaDocRef, { estado: 'Atendida' });
-
-    alert('La cita ha sido marcada como Atendida.');
-  } catch (error) {
-    console.error('Error al cambiar el estado de la cita:', error);
-    alert('Hubo un error al cambiar el estado de la cita.');
-  }
-};
-
-
-  const cancelarCita = async (id) => {
-    const confirmation = window.confirm('¿Estás seguro de cancelar la cita?');
-    if (!confirmation) return;
-  
     try {
-      // Determine correct document reference
       let citaDocRef;
-  
+
       if (servicioSeleccionado && servicioSeleccionado !== 'todos') {
-        // If citas are nested under a specific service
         citaDocRef = doc(db, 'servicios', servicioSeleccionado, 'citas', id);
       } else {
-        // If citas are in a top-level collection
         citaDocRef = doc(db, 'citas', id);
       }
-  
-      console.log('Updating document at:', citaDocRef.path);
-  
-      // Update Firestore document
-      await updateDoc(citaDocRef, { estado: 'Cancelada' });
-  
-      alert('La cita ha sido cancelada.');
+
+      await updateDoc(citaDocRef, { estado: 'Atendida' });
+
+      Swal.fire({
+        title: 'Éxito',
+        text: 'La cita ha sido marcada como Atendida.',
+        icon: 'success',
+      });
     } catch (error) {
-      console.error('Error al cancelar la cita:', error);
-      alert('Hubo un error al cancelar la cita.');
+      console.error('Error al cambiar el estado de la cita:', error);
+      Swal.fire({
+        title: 'Error',
+        text: 'Hubo un error al cambiar el estado de la cita.',
+        icon: 'error',
+      });
     }
   };
-  
+
+  const cancelarCita = async (id) => {
+    const result = await Swal.fire({
+      title: '¿Estás seguro?',
+      text: 'Esta acción cancelará la cita.',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Sí, cancelar la cita',
+      cancelButtonText: 'Cancelar',
+    });
+
+    if (!result.isConfirmed) return;
+
+    try {
+      let citaDocRef;
+
+      if (servicioSeleccionado && servicioSeleccionado !== 'todos') {
+        citaDocRef = doc(db, 'servicios', servicioSeleccionado, 'citas', id);
+      } else {
+        citaDocRef = doc(db, 'citas', id);
+      }
+
+      await updateDoc(citaDocRef, { estado: 'Cancelada' });
+
+      Swal.fire({
+        title: 'Éxito',
+        text: 'La cita ha sido cancelada.',
+        icon: 'success',
+      });
+    } catch (error) {
+      console.error('Error al cancelar la cita:', error);
+      Swal.fire({
+        title: 'Error',
+        text: 'Hubo un error al cancelar la cita.',
+        icon: 'error',
+      });
+    }
+  };
 
   const handleVolver = () => {
     router.push('/admin/dashboard');
@@ -125,40 +146,34 @@ function Citas() {
   return (
     <div className="flex min-h-screen bg-gray-100">
       {/* Sidebar */}
-      <div className={`fixed inset-0 z-20 bg-teal-900 text-white p-6 transform ${isMenuOpen ? 'translate-x-0' : '-translate-x-full'} transition-transform duration-300 ease-in-out lg:relative lg:translate-x-0 lg:w-64`}>
-        <div className="flex items-center justify-between mb-8 lg:hidden">
-          <h1 className="text-lg font-bold">Susticorp</h1>
-          <button onClick={() => setIsMenuOpen(false)} className="text-white">
-            <span className="material-icons">close</span>
-          </button>
-        </div>
-        <ul className="space-y-4">
-          {[{ label: 'Citas', path: '/admin/citas' }, { label: 'Cotizaciones', path: '/admin/cotizaciones' }, { label: 'Añadir servicio', path: '/admin/agregarservicio' }, { label: 'Modificar servicio', path: '/admin/modificarservicio' }].map(({ label, path }) => (
-            <li key={path}>
-              <button onClick={() => router.push(path)} className="flex items-center space-x-2 hover:text-teal-400">
-                <span>{label}</span>
-              </button>
-            </li>
-          ))}
-          <li>
-            <button onClick={() => handleVolver()} className="flex items-center space-x-2 hover:text-teal-400">
-              <span>Cerrar sesión</span>
-            </button>
-          </li>
-        </ul>
-      </div>
-
+      <Navbar isMenuOpen={isMenuOpen} setIsMenuOpen={setIsMenuOpen} />
+      
       {/* Main Content */}
       <div className="flex-1 p-6">
-        <div className="flex justify-between items-center mb-4">
-          <button className="bg-teal-800 text-white px-4 py-2 rounded" onClick={handleVolver}>
+        <header className="flex items-center justify-between mb-8 lg:hidden">
+          <h1 className="text-2xl font-bold">Citas</h1>
+          <button onClick={() => setIsMenuOpen(true)} className="text-gray-800">
+            <span className="material-icons">menu</span>
+          </button>
+        </header>
+
+        {/* Buttons */}
+        <div className="flex justify-between mb-4">
+          <button
+            className="bg-teal-800 text-white px-4 py-2 rounded"
+            onClick={handleVolver}
+          >
             Volver
           </button>
-          <button className="bg-teal-800 text-white px-4 py-2 rounded" onClick={() => router.push('/admin/agregarcita')}>
+          <button
+            className="bg-teal-800 text-white px-4 py-2 rounded"
+            onClick={() => router.push('/admin/agregarcita')}
+          >
             Agregar cita
           </button>
         </div>
-
+        
+        {/* Filters */}
         <div className="flex justify-between items-center mb-4">
           <div>
             <label htmlFor="servicios" className="block text-black font-semibold mb-2">
@@ -197,6 +212,7 @@ function Citas() {
           </div>
         </div>
 
+        {/* Appointments List */}
         <div className="flex">
           <div className="w-1/3 text-gray-600 bg-white rounded-lg shadow p-4 mr-4">
             {filteredCitas.map((cita) => (

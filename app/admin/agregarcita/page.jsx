@@ -1,8 +1,9 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { db, auth } from '@/app/firebase/config'; // Importa la configuración de Firebase
+import { db, auth } from '@/app/firebase/config'; 
 import { collection, getDocs, doc, getDoc, addDoc } from 'firebase/firestore';
+import Navbar from '@/app/components/navbar'
 
 function AgregarCita() {
   const [servicios, setServicios] = useState([]); // Lista de servicios disponibles
@@ -97,34 +98,9 @@ function AgregarCita() {
 
   return (
     <div className="flex min-h-screen bg-gray-100">
+      <Navbar isMenuOpen={isMenuOpen} setIsMenuOpen={setIsMenuOpen} />
       {/* Sidebar */}
-      <div className={`fixed inset-0 z-20 bg-teal-900 text-white p-6 transform ${isMenuOpen ? 'translate-x-0' : '-translate-x-full'} transition-transform duration-300 ease-in-out lg:relative lg:translate-x-0 lg:w-64`}>
-        <div className="flex items-center justify-between mb-8 lg:hidden">
-          <h1 className="text-lg font-bold">Susticorp</h1>
-          <button onClick={() => setIsMenuOpen(false)} className="text-white">
-            <span className="material-icons">close</span>
-          </button>
-        </div>
-        <div className="flex flex-col items-center mb-10">
-          <img src="https://res.cloudinary.com/dqigc5zir/image/upload/v1733178017/nplcp7t5yc0czt7pctwc.png" alt="Susticorp Logo" className="w-16 h-16 mb-4" />
-          <h1 className="text-lg font-semibold">Susticorp</h1>
-        </div>
-        <ul className="space-y-4">
-          {[{ label: 'Citas', path: '/admin/citas' }, { label: 'Cotizaciones', path: '/admin/cotizaciones' }, { label: 'Añadir servicio', path: '/admin/agregarservicio' }, { label: 'Modificar servicio', path: '/admin/modificarservicio' }].map(({ label, path }) => (
-            <li key={path}>
-              <button onClick={() => router.push(path)} className="flex items-center space-x-2 hover:text-teal-400">
-                <span>{label}</span>
-              </button>
-            </li>
-          ))}
-          <li>
-            <button onClick={() => router.push('/admin/sign-in')} className="flex items-center space-x-2 hover:text-teal-400">
-              <span>Cerrar sesión</span>
-            </button>
-          </li>
-        </ul>
-      </div>
-
+      
       {/* Main Content */}
       <div className="flex-1 p-6">
         {/* Header */}
