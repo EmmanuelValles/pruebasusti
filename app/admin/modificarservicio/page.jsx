@@ -3,13 +3,12 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { db } from '@/app/firebase/config';
 import { collection, doc, getDocs, getDoc, updateDoc, deleteDoc } from 'firebase/firestore';
-import { auth } from '@/app/firebase/config';
 import Navbar from '@/app/components/navbar'
+import withAuth from '@/app/hoc/withAuth';
 
 function ModificarServicio() {
   const router = useRouter();
   const serviciosCollection = collection(db, "servicios");
-  const [user, setUser] = useState(null);
   const [servicios, setServicios] = useState([]);
   const [selectedServicio, setSelectedServicio] = useState(null);
   const [nombre, setNombre] = useState('');
@@ -19,18 +18,6 @@ function ModificarServicio() {
   const [previews, setPreviews] = useState([]);
   const [subiendo, setSubiendo] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-
-  useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged((currentUser) => {
-      if (currentUser) {
-        setUser(currentUser);
-      } else {
-        router.push('/admin/sign-in');
-      }
-    });
-
-    return () => unsubscribe();
-  }, [router]);
 
   useEffect(() => {
     const fetchServicios = async () => {
@@ -149,10 +136,6 @@ function ModificarServicio() {
     }
   };
   
-
-  if (!user) {
-    return <p>Cargando...</p>;
-  }
 
   return (
     <div className="flex min-h-screen bg-gray-100">
@@ -277,4 +260,4 @@ function ModificarServicio() {
   );
 }
 
-export default ModificarServicio;
+export default withAuth(ModificarServicio);

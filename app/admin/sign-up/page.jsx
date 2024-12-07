@@ -2,6 +2,7 @@
 import{ useState } from 'react';
 import{useCreateUserWithEmailAndPassword}from 'react-firebase-hooks/auth';
 import {auth} from "@/app/firebase/config";
+import withAuth from '@/app/hoc/withAuth';
 
 
 function SignUp() {
@@ -76,4 +77,4 @@ function SignUp() {
   );
 }
 
-export default SignUp;
+export default withAuth(SignUp);

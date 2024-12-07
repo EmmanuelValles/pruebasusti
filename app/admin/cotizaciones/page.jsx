@@ -1,41 +1,27 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { db, auth } from '@/app/firebase/config'; // Importa la configuración de Firebase
-import { collection, getDocs, doc, getDoc, addDoc } from 'firebase/firestore';
-import Navbar from '@/app/components/navbar'
+import { db } from '@/app/firebase/config';
+import { collection, getDocs, onSnapshot, doc, updateDoc } from 'firebase/firestore';
+import Swal from 'sweetalert2';
+import 'sweetalert2/dist/sweetalert2.min.css';
+import Navbar from '@/app/components/navbar';
+import withAuth from '@/app/hoc/withAuth';
 
-
-function AgregarCotizacion() {
-  const [servicios, setServicios] = useState([]); // Lista de servicios disponibles
-  const [formData, setFormData] = useState({
-    clienteNombre: '',
-    correo: '',
-    direccion: '',
-    estatus: 'Pendiente', // Estado inicial de la cotización
-    fechaSolicitud: '',
-    servicio: '', // ID del servicio
-    descripcion: '',
-    telefono: '',
-    costoEstimado: '', // Nuevo campo de costo estimado
-  });
-  const router = useRouter();
-  const [user, setUser] = useState(null);
+function Cotizaciones() {
+  const [servicios, setServicios] = useState([]);
+  const [cotizaciones, setCotizaciones] = useState([]);
+  const [filteredCotizaciones, setFilteredCotizaciones] = useState([]);
+  const [cotizacionSeleccionada, setCotizacionSeleccionada] = useState(null);
+  const [servicioSeleccionado, setServicioSeleccionado] = useState('');
+  const [estadoSeleccionado, setEstadoSeleccionado] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [costoEstimado, setCostoEstimado] = useState('');
 
-  useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged((currentUser) => {
-      if (currentUser) {
-        setUser(currentUser);
-      } else {
-        router.push('/admin/sign-in');
-      }
-    });
+  const router = useRouter();
 
-    return () => unsubscribe();
-  }, [router]);
-
-  // Cargar servicios desde Firestore
   useEffect(() => {
     const fetchServicios = async () => {
       const serviciosRef = collection(db, 'servicios');
@@ -50,54 +36,78 @@ function AgregarCotizacion() {
     fetchServicios();
   }, []);
 
-  // Manejar cambios en el formulario
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData({ ...formData, [name]: value });
-  };
+  useEffect(() => {
+    const fetchCotizaciones = async () => {
+      let cotizacionesQuery;
+      if (servicioSeleccionado && servicioSeleccionado !== 'todos') {
+        const cotizacionesRef = collection(db, 'servicios', servicioSeleccionado, 'cotizaciones');
+        cotizacionesQuery = cotizacionesRef;
+      } else {
+        cotizacionesQuery = collection(db, 'servicios');
+      }
 
-  // Agregar cotización a Firestore
-  const agregarCotizacion = async () => {
-    const { clienteNombre, correo, direccion, estatus, fechaSolicitud, servicio, descripcion, telefono, costoEstimado } = formData;
+      const unsubscribe = onSnapshot(cotizacionesQuery, (snapshot) => {
+        const cotizacionesList = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
+        setCotizaciones(cotizacionesList);
+      });
 
-    if (!clienteNombre || !correo || !direccion || !fechaSolicitud || !servicio || !descripcion || !telefono || !costoEstimado) {
-      alert('Por favor, completa todos los campos.');
+      return () => unsubscribe();
+    };
+
+    fetchCotizaciones();
+  }, [servicioSeleccionado]);
+
+  useEffect(() => {
+    const filtered = cotizaciones.filter((cotizacion) => {
+      const matchesEstado = estadoSeleccionado ? cotizacion.estado === estadoSeleccionado : true;
+      const matchesSearch = searchTerm ? cotizacion.telefono?.toString().includes(searchTerm) : true;
+      return matchesEstado && matchesSearch;
+    });
+    setFilteredCotizaciones(filtered);
+  }, [estadoSeleccionado, cotizaciones, searchTerm]);
+
+  const agregarEstimado = async () => {
+    if (!costoEstimado || isNaN(costoEstimado)) {
+      Swal.fire({
+        title: 'Error',
+        text: 'Por favor, ingresa un costo válido.',
+        icon: 'error',
+      });
       return;
     }
 
     try {
-      // Primero, obtener el nombre del servicio a partir de su ID
-      const servicioRef = doc(db, 'servicios', servicio);
-      const servicioSnapshot = await getDoc(servicioRef); // Usamos getDoc()
+      const cotizacionDocRef = doc(
+        db,
+        'servicios',
+        servicioSeleccionado,
+        'cotizaciones',
+        cotizacionSeleccionada.id
+      );
+      await updateDoc(cotizacionDocRef, { costoEstimado });
 
-      if (!servicioSnapshot.exists()) {
-        alert('Servicio no encontrado.');
-        return;
-      }
-
-      const nombreServicio = servicioSnapshot.data().nombre;
-
-      // Luego, guardar la cotización con el nombre del servicio y costo estimado
-      const cotizacionesCollectionRef = collection(servicioRef, 'cotizaciones'); // Subcolección "cotizaciones"
-
-      await addDoc(cotizacionesCollectionRef, {
-        clienteNombre,
-        correo,
-        direccion,
-        estatus,
-        fechaSolicitud,
-        servicio: nombreServicio, // Guardamos el nombre del servicio
-        descripcion,
-        telefono,
-        costoEstimado, // Guardamos el costo estimado
+      Swal.fire({
+        title: 'Éxito',
+        text: 'El costo estimado ha sido agregado.',
+        icon: 'success',
       });
-
-      alert('Cotización agregada correctamente.');
-      router.push('/admin/cotizaciones'); // Redirigir a la página de cotizaciones
+      setIsModalOpen(false);
+      setCostoEstimado('');
     } catch (error) {
-      console.error('Error al agregar la cotización:', error);
-      alert('Ocurrió un error al agregar la cotización.');
+      console.error('Error al agregar el costo estimado:', error);
+      Swal.fire({
+        title: 'Error',
+        text: 'Hubo un error al agregar el costo estimado.',
+        icon: 'error',
+      });
     }
+  };
+
+  const handleVolver = () => {
+    router.push('/admin/dashboard');
   };
 
   return (
@@ -107,134 +117,165 @@ function AgregarCotizacion() {
 
       {/* Main Content */}
       <div className="flex-1 p-6">
-        {/* Header */}
         <header className="flex items-center justify-between mb-8 lg:hidden">
-          <h1 className="text-2xl font-bold text-black">Agregar cotización</h1>
+          <h1 className="text-2xl font-bold">Cotizaciones</h1>
           <button onClick={() => setIsMenuOpen(true)} className="text-gray-800">
             <span className="material-icons">menu</span>
           </button>
         </header>
 
-        {/* Formulario */}
-        <div className="bg-white rounded-lg shadow p-6">
-          <h2 className="font-bold text-gray-600 text-lg mb-4">Información de la cotización:</h2>
+        {/* Buttons */}
+        <div className="flex justify-between mb-4">
+          <button className="bg-teal-800 text-white px-4 py-2 rounded" onClick={handleVolver}>
+            Volver
+          </button>
+          <button
+            className="bg-teal-800 text-white px-4 py-2 rounded"
+            onClick={() => router.push('/admin/agregarcotizacion')}
+          >
+            Agregar cotización
+          </button>
+        </div>
 
-          <div className="grid grid-cols-1 gap-4">
-            {/* Nombre del cliente */}
-            <div>
-              <label className="block text-gray-600 font-semibold mb-2">Nombre del cliente:</label>
-              <input
-                type="text"
-                name="clienteNombre"
-                value={formData.clienteNombre}
-                onChange={handleChange}
-                className="w-full text-gray-600 p-2 border rounded"
-              />
-            </div>
-
-            {/* Correo */}
-            <div>
-              <label className="block text-gray-600 font-semibold mb-2">Correo:</label>
-              <input
-                type="email"
-                name="correo"
-                value={formData.correo}
-                onChange={handleChange}
-                className="w-full p-2 text-gray-600 border rounded"
-              />
-            </div>
-
-            {/* Dirección */}
-            <div>
-              <label className="block text-gray-600 font-semibold mb-2">Dirección:</label>
-              <input
-                type="text"
-                name="direccion"
-                value={formData.direccion}
-                onChange={handleChange}
-                className="w-full p-2 text-gray-600 border rounded"
-              />
-            </div>
-
-            {/* Fecha de solicitud */}
-            <div>
-              <label className="block text-gray-600 font-semibold mb-2">Fecha de solicitud:</label>
-              <input
-                type="date"
-                name="fechaSolicitud"
-                value={formData.fechaSolicitud}
-                onChange={handleChange}
-                className="w-full p-2 text-gray-600 border rounded"
-              />
-            </div>
-
-            {/* Servicio */}
-            <div>
-              <label className="block text-gray-600 font-semibold mb-2">Servicio:</label>
-              <select
-                name="servicio"
-                value={formData.servicio}
-                onChange={handleChange}
-                className="w-full p-2 text-gray-600 border rounded"
-              >
-                <option value="">Selecciona</option>
-                {servicios.map((servicio) => (
-                  <option key={servicio.id} value={servicio.id}>
-                    {servicio.nombre}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Descripción */}
-            <div>
-              <label className="block text-gray-600 font-semibold mb-2">Descripción:</label>
-              <textarea
-                name="descripcion"
-                value={formData.descripcion}
-                onChange={handleChange}
-                className="w-full p-2 text-gray-600 border rounded"
-              />
-            </div>
-
-            {/* Teléfono */}
-            <div>
-              <label className="block text-gray-600 font-semibold mb-2">Teléfono:</label>
-              <input
-                type="text"
-                name="telefono"
-                value={formData.telefono}
-                onChange={handleChange}
-                className="w-full p-2 text-gray-600 border rounded"
-              />
-            </div>
-
-            {/* Costo estimado */}
-            <div>
-              <label className="block text-gray-600 font-semibold mb-2">Costo estimado:</label>
-              <input
-                type="text"
-                name="costoEstimado"
-                value={formData.costoEstimado}
-                onChange={handleChange}
-                className="w-full p-2 text-gray-600 border rounded"
-              />
-            </div>
+        {/* Filters */}
+        <div className="flex justify-between items-center mb-4 space-x-4">
+          <div className="flex-1">
+            <label htmlFor="servicios" className="block text-black font-semibold mb-2">
+              Filtrar por servicio:
+            </label>
+            <select
+              id="servicios"
+              className="w-full p-2 text-gray-600 border rounded"
+              value={servicioSeleccionado}
+              onChange={(e) => setServicioSeleccionado(e.target.value)}
+            >
+              <option value="todos">Todos los servicios</option>
+              {servicios.map((servicio) => (
+                <option key={servicio.id} value={servicio.id}>
+                  {servicio.nombre}
+                </option>
+              ))}
+            </select>
           </div>
 
-          {/* Botón para agregar cotización */}
-          <div className="mt-6">
-            <button
-              className="bg-teal-800 text-white px-4 py-2 rounded w-full"
-              onClick={agregarCotizacion}
+          <div className="flex-1">
+            <label htmlFor="search" className="block text-black font-semibold mb-2">
+              Buscar por número de teléfono:
+            </label>
+            <input
+              id="search"
+              type="text"
+              className="w-full p-2 text-gray-600 border rounded"
+              placeholder="Ingresa el número"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+
+          <div>
+            <label htmlFor="estado" className="block text-black font-semibold mb-2">
+              Filtrar por estado:
+            </label>
+            <select
+              id="estado"
+              className="w-full p-2 text-gray-600 border rounded"
+              value={estadoSeleccionado}
+              onChange={(e) => setEstadoSeleccionado(e.target.value)}
             >
-              Agregar cotización
-            </button>
+              <option value="">Todos</option>
+              <option value="Pendiente">Pendiente</option>
+              <option value="Cancelada">Cancelada</option>
+              <option value="Atendida">Atendida</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Cotizaciones List */}
+        <div className="flex">
+          <div className="w-1/3 text-gray-600 bg-white rounded-lg shadow p-4 mr-4">
+            {filteredCotizaciones.map((cotizacion) => (
+              <div
+                key={cotizacion.id}
+                className={`p-2 mb-2 cursor-pointer rounded ${
+                  cotizacionSeleccionada?.id === cotizacion.id
+                    ? 'bg-teal-100'
+                    : 'hover:bg-gray-100'
+                }`}
+                onClick={() => setCotizacionSeleccionada(cotizacion)}
+              >
+                <p>{cotizacion.fecha} {cotizacion.hora}</p>
+                <p>{cotizacion.clienteNombre}</p>
+                <p><strong>Número:</strong> {cotizacion.telefono}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="flex-1 bg-white rounded-lg shadow p-4">
+            {cotizacionSeleccionada ? (
+              <>
+                <h2 className="font-bold text-black text-lg mb-4">Información:</h2>
+                <p className="text-gray-600"><strong>Cliente:</strong> {cotizacionSeleccionada.clienteNombre}</p>
+                <p className="text-gray-600"><strong>Teléfono:</strong> {cotizacionSeleccionada.telefono}</p>
+                <p className="text-gray-600"><strong>Correo:</strong> {cotizacionSeleccionada.correo}</p>
+                <p className="text-gray-600"><strong>Fecha de solicitud:</strong> {cotizacionSeleccionada.fechaSolicitud}</p>
+                <p className="text-gray-600"><strong>Descripcion:</strong> {cotizacionSeleccionada.descripcion}</p>
+                <p className="text-gray-600"><strong>Estado:</strong> {cotizacionSeleccionada.estado}</p>
+                <p className="text-gray-600"><strong>Costo Estimado:</strong> {cotizacionSeleccionada.costoEstimado || 'No especificado'}</p>
+
+                {/* Actions */}
+                <div className="mt-4 flex space-x-4">
+                  <button
+                    className="bg-teal-800 text-white px-4 py-2 rounded"
+                    onClick={() => setIsModalOpen(true)}
+                  >
+                    Agregar estimado
+                  </button>
+                  <button
+                    className="bg-red-600 text-white px-4 py-2 rounded"
+                    onClick={() => cancelarCotizacion(cotizacionSeleccionada.id)}
+                  >
+                    Cancelar Cotización
+                  </button>
+                </div>
+              </>
+            ) : (
+              <p className="text-gray-600">Selecciona una cotización para ver detalles</p>
+            )}
           </div>
         </div>
       </div>
+
+      {/* Modal */}
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
+          <div className="bg-white p-6 rounded shadow-lg w-1/3">
+            <h2 className="text-black text-lg font-bold mb-4">Agregar costo estimado</h2>
+            <input
+              type="number"
+              placeholder="Ingresa el costo estimado"
+              value={costoEstimado}
+              onChange={(e) => setCostoEstimado(e.target.value)}
+              className="w-full text-gray-600 p-2 border rounded mb-4"
+            />
+            <div className="flex justify-end space-x-4">
+              <button
+                onClick={() => setIsModalOpen(false)}
+                className="bg-gray-400 text-white px-4 py-2 rounded"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={agregarEstimado}
+                className="bg-teal-800 text-white px-4 py-2 rounded"
+              >
+                Guardar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-export default AgregarCotizacion;
+export default withAuth(Cotizaciones);

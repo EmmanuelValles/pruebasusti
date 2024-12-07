@@ -1,45 +1,50 @@
 'use client';
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { auth } from '@/app/firebase/config';
-import Navbar from '@/app/components/navbar'
+import { useState, useEffect } from 'react';
+import { collection, getDocs, query, where } from 'firebase/firestore';
+import { db } from '@/app/firebase/config';
+import Navbar from '@/app/components/navbar';
+import Link from 'next/link';
+import withAuth from '@/app/hoc/withAuth';
 
 function Dashboard() {
-  const [user, setUser] = useState(null);
-  const router = useRouter();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [counts, setCounts] = useState({ citas: 0, cotizaciones: 0 });
 
   useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged((currentUser) => {
-      if (currentUser) {
-        setUser(currentUser);
-      } else {
-        router.push('/admin/sign-in');
+    const fetchCounts = async () => {
+      try {
+        const serviciosRef = collection(db, 'servicios');
+        const serviciosSnapshot = await getDocs(serviciosRef);
+
+        let citasCount = 0;
+        let cotizacionesCount = 0;
+
+        for (const servicioDoc of serviciosSnapshot.docs) {
+          const citasRef = collection(servicioDoc.ref, 'citas');
+          const cotizacionesRef = collection(servicioDoc.ref, 'cotizaciones');
+
+          const citasQuery = query(citasRef, where('estado', '==', 'Pendiente'));
+          const cotizacionesQuery = query(cotizacionesRef, where('estado', '==', 'Pendiente'));
+
+          const citasSnapshot = await getDocs(citasQuery);
+          const cotizacionesSnapshot = await getDocs(cotizacionesQuery);
+
+          citasCount += citasSnapshot.size;
+          cotizacionesCount += cotizacionesSnapshot.size;
+        }
+
+        setCounts({ citas: citasCount, cotizaciones: cotizacionesCount });
+      } catch (error) {
+        console.error('Error fetching counts:', error);
       }
-    });
+    };
 
-    return () => unsubscribe();
-  }, [router]);
-
-  if (!user) {
-    return <div className="flex items-center justify-center min-h-screen bg-gray-100"><p>Loading...</p></div>;
-  }
-
-  const handleSignOut = async () => {
-    try {
-      await auth.signOut();
-      router.push('/admin/sign-in');
-    } catch (error) {
-      console.error('Error signing out:', error);
-    }
-  };
+    fetchCounts();
+  }, []);
 
   return (
     <div className="flex min-h-screen bg-gray-100">
-      {/* Sidebar */}
       <Navbar isMenuOpen={isMenuOpen} setIsMenuOpen={setIsMenuOpen} />
-
-      {/* Main Content */}
       <div className="flex-1 p-6">
         <header className="flex items-center justify-between mb-8 lg:hidden">
           <h1 className="text-2xl font-bold">Dashboard</h1>
@@ -47,22 +52,16 @@ function Dashboard() {
             <span className="material-icons">menu</span>
           </button>
         </header>
-
         <div className="bg-white rounded-lg shadow-lg p-6">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-6">
-            {[
-              { label: 'Citas pendientes', value: 'XX', bg: 'bg-teal-100', text: 'text-teal-800' },
-              { label: 'Cotizaciones pendientes', value: 'XX', bg: 'bg-yellow-100', text: 'text-yellow-800' },
-            ].map(({ label, value, bg, text }) => (
-              <div key={label} className={`p-4 rounded-lg shadow-md ${bg}`}>
-                <h2 className={`text-lg font-semibold ${text}`}>{label}</h2>
-                <p className={`text-3xl font-bold ${text}`}>{value}</p>
-              </div>
+            {[{ label: 'Citas pendientes', value: counts.citas, link: '/admin/citas' }, { label: 'Cotizaciones pendientes', value: counts.cotizaciones, link: '/admin/cotizaciones' }].map(({ label, value, link }) => (
+              <Link key={label} href={link}>
+                <div className="p-4 rounded-lg shadow-md bg-teal-100 cursor-pointer">
+                  <h2 className="text-lg font-semibold text-teal-800">{label}</h2>
+                  <p className="text-3xl font-bold text-teal-800">{value}</p>
+                </div>
+              </Link>
             ))}
-          </div>
-
-          <div className="mt-6 border-t pt-6 text-center">
-            <p className="text-gray-500">Espacio para calendario</p>
           </div>
         </div>
       </div>
@@ -70,4 +69,4 @@ function Dashboard() {
   );
 }
 
-export default Dashboard;
+export default withAuth(Dashboard);

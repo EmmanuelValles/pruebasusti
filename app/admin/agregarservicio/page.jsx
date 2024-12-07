@@ -3,13 +3,14 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { db } from '@/app/firebase/config'; // Importa la configuración de Firebase
 import { addDoc, collection, doc, setDoc } from 'firebase/firestore';
-import { auth } from '@/app/firebase/config';
 import Navbar from '@/app/components/navbar'
+import Swal from 'sweetalert2';
+import withAuth from '@/app/hoc/withAuth';
+
 
 function AgregarServicio() {
   const router = useRouter();
   const serviciosCollection = collection(db, "servicios");
-  const [user, setUser] = useState(null);
   // Estados locales para los valores del formulario
   const [nombre, setNombre] = useState('');
   const [descripcion, setDescripcion] = useState('');
@@ -18,31 +19,6 @@ function AgregarServicio() {
   const [previews, setPreviews] = useState([]); // URLs para las miniaturas
   const [subiendo, setSubiendo] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false); // Menú de la sidebar
-
-  useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged((currentUser) => {
-      if (currentUser) {
-        setUser(currentUser); // Guardar al usuario autenticado
-      } else {
-        router.push('/admin/sign-in'); // Redirigir al login si no hay usuario
-      }
-    });
-
-    return () => unsubscribe(); // Limpiar el listener cuando se desmonta el componente
-  }, [router]);
-
-  if (!user) {
-    return <p>Cargando...</p>; // Mostrar algo mientras se verifica la autenticación
-  }
-
-  const handleSignOut = async () => {
-    try {
-      await auth.signOut();
-      router.push('/admin/sign-in'); // Redirigir al login después de cerrar sesión
-    } catch (error) {
-      console.error('Error al cerrar sesión:', error);
-    }
-  };
 
   const handleFileChange = (e) => {
     const files = Array.from(e.target.files);
@@ -85,12 +61,23 @@ function AgregarServicio() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+  
+    // Validar campos
+    if (!nombre || !descripcion || !rangoPrecios || imagenes.length === 0) {
+      Swal.fire({
+        icon: 'error',
+        title: 'Error',
+        text: 'Por favor, completa todos los campos del formulario e incluye al menos una imagen.',
+      });
+      return;
+    }
+  
     setSubiendo(true);
-
+  
     try {
       // Subir imágenes a Cloudinary y obtener sus URLs
       const enlacesImagenes = await subirImagenesACloudinary();
-
+  
       // Crear un documento en la colección "servicios"
       const servicioRef = await addDoc(serviciosCollection, {
         nombre,
@@ -98,17 +85,29 @@ function AgregarServicio() {
         rangoPrecios,
         creadoEn: new Date(),
       });
-
+  
       // Crear una subcolección para las imágenes
       const imagenesCollection = collection(servicioRef, "imagenes");
       for (let url of enlacesImagenes) {
         await setDoc(doc(imagenesCollection), { url });
       }
-
-      console.log("Servicio agregado correctamente");
-      router.push('/admin/dashboard'); // Redirecciona a la página principal o a donde prefieras
+  
+      // Mostrar alerta de éxito
+      Swal.fire({
+        icon: 'success',
+        title: 'Servicio agregado',
+        text: 'El servicio se ha agregado correctamente.',
+        confirmButtonText: 'Aceptar',
+      }).then(() => {
+        router.push('/admin/modificarservicio'); 
+      });
     } catch (error) {
       console.error("Error al agregar el servicio: ", error);
+      Swal.fire({
+        icon: 'error',
+        title: 'Error',
+        text: 'Ocurrió un error al agregar el servicio. Por favor, inténtalo de nuevo.',
+      });
     } finally {
       setSubiendo(false);
     }
@@ -226,4 +225,4 @@ function AgregarServicio() {
   );
 }
 
-export default AgregarServicio;
+export default withAuth(AgregarServicio);

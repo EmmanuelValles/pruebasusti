@@ -5,7 +5,8 @@ import { db } from '@/app/firebase/config';
 import { collection, getDocs, onSnapshot, doc, updateDoc } from 'firebase/firestore';
 import Swal from 'sweetalert2';
 import 'sweetalert2/dist/sweetalert2.min.css';
-import Navbar from '@/app/components/navbar'
+import Navbar from '@/app/components/navbar';
+import withAuth from '@/app/hoc/withAuth';
 
 function Citas() {
   const [servicios, setServicios] = useState([]);
@@ -14,6 +15,7 @@ function Citas() {
   const [citaSeleccionada, setCitaSeleccionada] = useState(null);
   const [servicioSeleccionado, setServicioSeleccionado] = useState('');
   const [estadoSeleccionado, setEstadoSeleccionado] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   const router = useRouter();
@@ -57,11 +59,13 @@ function Citas() {
   }, [servicioSeleccionado]);
 
   useEffect(() => {
-    const filtered = estadoSeleccionado
-      ? citas.filter((cita) => cita.estado === estadoSeleccionado)
-      : citas;
+    const filtered = citas.filter((cita) => {
+      const matchesEstado = estadoSeleccionado ? cita.estado === estadoSeleccionado : true;
+      const matchesSearch = searchTerm ? cita.telefono?.toString().includes(searchTerm) : true;
+      return matchesEstado && matchesSearch;
+    });
     setFilteredCitas(filtered);
-  }, [estadoSeleccionado, citas]);
+  }, [estadoSeleccionado, citas, searchTerm]);
 
   const cambiarEstado = async (id) => {
     const result = await Swal.fire({
@@ -147,7 +151,7 @@ function Citas() {
     <div className="flex min-h-screen bg-gray-100">
       {/* Sidebar */}
       <Navbar isMenuOpen={isMenuOpen} setIsMenuOpen={setIsMenuOpen} />
-      
+
       {/* Main Content */}
       <div className="flex-1 p-6">
         <header className="flex items-center justify-between mb-8 lg:hidden">
@@ -159,10 +163,7 @@ function Citas() {
 
         {/* Buttons */}
         <div className="flex justify-between mb-4">
-          <button
-            className="bg-teal-800 text-white px-4 py-2 rounded"
-            onClick={handleVolver}
-          >
+          <button className="bg-teal-800 text-white px-4 py-2 rounded" onClick={handleVolver}>
             Volver
           </button>
           <button
@@ -172,10 +173,10 @@ function Citas() {
             Agregar cita
           </button>
         </div>
-        
+
         {/* Filters */}
-        <div className="flex justify-between items-center mb-4">
-          <div>
+        <div className="flex justify-between items-center mb-4 space-x-4">
+          <div className="flex-1">
             <label htmlFor="servicios" className="block text-black font-semibold mb-2">
               Próximas citas:
             </label>
@@ -192,6 +193,20 @@ function Citas() {
                 </option>
               ))}
             </select>
+          </div>
+
+          <div className="flex-1">
+            <label htmlFor="search" className="block text-black font-semibold mb-2">
+              Buscar por número de telefono:
+            </label>
+            <input
+              id="search"
+              type="text"
+              className="w-full p-2 text-gray-600 border rounded"
+              placeholder="Ingresa el número"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
           </div>
 
           <div>
@@ -218,11 +233,14 @@ function Citas() {
             {filteredCitas.map((cita) => (
               <div
                 key={cita.id}
-                className={`p-2 mb-2 cursor-pointer rounded ${citaSeleccionada?.id === cita.id ? 'bg-teal-100' : 'hover:bg-gray-100'}`}
+                className={`p-2 mb-2 cursor-pointer rounded ${
+                  citaSeleccionada?.id === cita.id ? 'bg-teal-100' : 'hover:bg-gray-100'
+                }`}
                 onClick={() => setCitaSeleccionada(cita)}
               >
                 <p>{cita.fecha} {cita.hora}</p>
                 <p>{cita.clienteNombre}</p>
+                <p><strong>Número:</strong> {cita.telefono}</p>
               </div>
             ))}
           </div>
@@ -232,29 +250,30 @@ function Citas() {
               <>
                 <h2 className="font-bold text-black text-lg mb-4">Información:</h2>
                 <p className="text-gray-600"><strong>Fecha:</strong> {citaSeleccionada.fecha}</p>
-                <p className="text-gray-600"><strong>Estado:</strong> {citaSeleccionada.estado}</p>
-                <p className="text-gray-600"><strong>Nombre del cliente:</strong> {citaSeleccionada.clienteNombre}</p>
-                <p className="text-gray-600"><strong>Teléfono:</strong> {citaSeleccionada.telefono}</p>
+                <p className="text-gray-600"><strong>Hora:</strong> {citaSeleccionada.hora}</p>
+                <p className="text-gray-600"><strong>Cliente:</strong> {citaSeleccionada.clienteNombre}</p>
+                <p className="text-gray-600"><strong>Telefono:</strong> {citaSeleccionada.telefono}</p>
                 <p className="text-gray-600"><strong>Correo:</strong> {citaSeleccionada.correo}</p>
-                <p className="text-gray-600"><strong>Dirección:</strong> {citaSeleccionada.direccion}</p>
+                <p className="text-gray-600"><strong>Estado:</strong> {citaSeleccionada.estado}</p>
 
-                <div className="mt-4 flex justify-between">
+                {/* Actions */}
+                <div className="mt-4 flex space-x-4">
                   <button
                     className="bg-teal-800 text-white px-4 py-2 rounded"
                     onClick={() => cambiarEstado(citaSeleccionada.id)}
                   >
-                    Cambiar Estado
+                    Marcar como Atendida
                   </button>
                   <button
                     className="bg-red-600 text-white px-4 py-2 rounded"
                     onClick={() => cancelarCita(citaSeleccionada.id)}
                   >
-                    Cancelar cita
+                    Cancelar Cita
                   </button>
                 </div>
               </>
             ) : (
-              <p className="text-gray-500">Selecciona una cita para ver los detalles</p>
+              <p className="text-gray-600">Selecciona una cita para ver detalles</p>
             )}
           </div>
         </div>
@@ -263,4 +282,4 @@ function Citas() {
   );
 }
 
-export default Citas;
+export default withAuth(Citas);

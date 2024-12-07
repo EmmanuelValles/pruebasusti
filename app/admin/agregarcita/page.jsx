@@ -1,9 +1,11 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { db, auth } from '@/app/firebase/config'; 
+import { db } from '@/app/firebase/config'; 
 import { collection, getDocs, doc, getDoc, addDoc } from 'firebase/firestore';
-import Navbar from '@/app/components/navbar'
+import Swal from 'sweetalert2'; // Importamos SweetAlert
+import Navbar from '@/app/components/navbar';
+import withAuth from '@/app/hoc/withAuth';
 
 function AgregarCita() {
   const [servicios, setServicios] = useState([]); // Lista de servicios disponibles
@@ -17,20 +19,8 @@ function AgregarCita() {
     direccion: '',
   });
   const router = useRouter();
-  const [user, setUser] = useState(null);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
-  useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged((currentUser) => {
-      if (currentUser) {
-        setUser(currentUser);
-      } else {
-        router.push('/admin/sign-in');
-      }
-    });
-
-    return () => unsubscribe();
-  }, [router]);
 
   // Cargar servicios desde Firestore
   useEffect(() => {
@@ -54,47 +44,89 @@ function AgregarCita() {
   };
 
   // Agregar cita a Firestore
-  const agregarCita = async () => {
-    const { clienteNombre, fecha, hora, servicio, telefono, correo, direccion } = formData;
+  // Agregar cita a Firestore con validaciones
+const agregarCita = async () => {
+  const { clienteNombre, fecha, hora, servicio, telefono, correo, direccion } = formData;
 
-    if (!clienteNombre || !fecha || !hora || !servicio || !telefono || !correo || !direccion) {
-      alert('Por favor, completa todos los campos.');
+  // Validar que todos los campos estén completos
+  if (!clienteNombre || !fecha || !hora || !servicio || !telefono || !correo || !direccion) {
+    Swal.fire({
+      icon: 'error',
+      title: 'Error',
+      text: 'Por favor, completa todos los campos.',
+    });
+    return;
+  }
+
+  // Validar formato de correo electrónico
+  const correoRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!correoRegex.test(correo)) {
+    Swal.fire({
+      icon: 'error',
+      title: 'Correo inválido',
+      text: 'Por favor, ingresa una dirección de correo válida.',
+    });
+    return;
+  }
+
+  // Validar longitud del número de teléfono
+  if (telefono.length !== 10 || !/^\d+$/.test(telefono)) {
+    Swal.fire({
+      icon: 'error',
+      title: 'Teléfono inválido',
+      text: 'El número de teléfono debe contener exactamente 10 dígitos.',
+    });
+    return;
+  }
+
+  try {
+    // Primero, obtener el nombre del servicio a partir de su ID
+    const servicioRef = doc(db, 'servicios', servicio);
+    const servicioSnapshot = await getDoc(servicioRef);
+
+    if (!servicioSnapshot.exists()) {
+      Swal.fire({
+        icon: 'error',
+        title: 'Error',
+        text: 'Servicio no encontrado.',
+      });
       return;
     }
 
-    try {
-      // Primero, obtener el nombre del servicio a partir de su ID
-      const servicioRef = doc(db, 'servicios', servicio);
-      const servicioSnapshot = await getDoc(servicioRef); // Usamos getDoc()
+    const nombreServicio = servicioSnapshot.data().nombre;
 
-      if (!servicioSnapshot.exists()) {
-        alert('Servicio no encontrado.');
-        return;
-      }
+    // Luego, guardar la cita con el nombre del servicio
+    const citasCollectionRef = collection(servicioRef, 'citas'); // Subcolección "citas"
 
-      const nombreServicio = servicioSnapshot.data().nombre;
+    await addDoc(citasCollectionRef, {
+      clienteNombre,
+      fecha,
+      hora,
+      servicio: nombreServicio, // Guardamos el nombre del servicio
+      estado: 'Pendiente', // Se guarda automáticamente como "Pendiente"
+      telefono,
+      correo,
+      direccion,
+    });
 
-      // Luego, guardar la cita con el nombre del servicio
-      const citasCollectionRef = collection(servicioRef, 'citas'); // Subcolección "citas"
-
-      await addDoc(citasCollectionRef, {
-        clienteNombre,
-        fecha,
-        hora,
-        servicio: nombreServicio, // Guardamos el nombre del servicio
-        estado: 'Pendiente', // Se guarda automáticamente como "Pendiente"
-        telefono,
-        correo,
-        direccion,
-      });
-
-      alert('Cita agregada correctamente.');
+    Swal.fire({
+      icon: 'success',
+      title: 'Cita agregada',
+      text: 'La cita se agregó correctamente.',
+      confirmButtonText: 'Aceptar',
+    }).then(() => {
       router.push('/admin/citas'); // Redirigir a la página de citas
-    } catch (error) {
-      console.error('Error al agregar la cita:', error);
-      alert('Ocurrió un error al agregar la cita.');
-    }
-  };
+    });
+  } catch (error) {
+    console.error('Error al agregar la cita:', error);
+    Swal.fire({
+      icon: 'error',
+      title: 'Error',
+      text: 'Ocurrió un error al agregar la cita.',
+    });
+  }
+};
+
 
   return (
     <div className="flex min-h-screen bg-gray-100">
@@ -222,4 +254,4 @@ function AgregarCita() {
   );
 }
 
-export default AgregarCita;
+export default withAuth(AgregarCita);
